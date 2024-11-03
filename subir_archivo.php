@@ -17,24 +17,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($_FILES['files']['error'][$key] === UPLOAD_ERR_OK) {
             $file_name = basename($_FILES['files']['name'][$key]);
             $file_path = $upload_dir . $file_name;
-
-            // Mover el archivo subido
             if (move_uploaded_file($tmp_name, $file_path)) {
-                // Guardar en la base de datos
-                $tipo = pathinfo($file_name, PATHINFO_EXTENSION);
-                $importante = isset($_POST['importante'][$key]) ? 1 : 0;
-                $dividir = ($tipo === 'pdf' && isset($_POST['dividir'][$key])) ? 1 : 0;
-
-                $stmt = $conn->prepare("INSERT INTO archivos (nombre, tipo, ruta, importante, dividir) VALUES (?, ?, ?, ?, ?)");
-                $stmt->bind_param("ssiii", $file_name, $tipo, $file_path, $importante, $dividir);
+                // Registrar el archivo en la base de datos
+                $stmt = $conn->prepare("INSERT INTO archivos (nombre_archivo, ruta, grupo_id, carpeta_id, clasificacion, comentario, fecha_subida) VALUES (?, ?, ?, ?, ?, ?, NOW())");
+                $stmt->bind_param("ssiiss", $file_name, $file_path, $_POST['grupo_id'], $_POST['carpeta_id'], $_POST['clasificacion'], $_POST['comentario']);
                 $stmt->execute();
-            } else {
-                $error = "Error al subir el archivo: $file_name.";
             }
         }
     }
-    header('Location: dashboard.php');
 }
+
+// Obtener grupos y carpetas para el formulario
+$grupos_result = $conn->query("SELECT * FROM grupos ORDER BY fecha_modificacion DESC");
+$carpetas_result = $conn->query("SELECT * FROM carpetas ORDER BY fecha_modificacion DESC");
 ?>
 
 <!DOCTYPE html>
@@ -46,43 +41,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body>
 <div class="container">
-    <h1>Subir Archivos Académicos</h1>
-    
+    <h2>Subir Archivos</h2>
     <form action="subir_archivo.php" method="POST" enctype="multipart/form-data">
-        <label for="files">Selecciona los archivos:</label>
-        <input type="file" name="files[]" accept=".pdf, .mp3, .wav" multiple required>
+        <label for="grupo_id">Selecciona un grupo:</label>
+        <select name="grupo_id" id="grupo_id" required>
+            <?php while ($grupo = $grupos_result->fetch_assoc()): ?>
+                <option value="<?php echo $grupo['id']; ?>"><?php echo htmlspecialchars($grupo['nombre_grupo']); ?></option>
+            <?php endwhile; ?>
+        </select>
         
-        <div id="opciones">
-            <h3>Opciones:</h3>
-            <label>
-                <input type="checkbox" name="importante[0]"> Marcar como Importante
-            </label>
-            <label>
-                <input type="checkbox" name="dividir[0]"> Dividir PDF (solo si es un archivo PDF)
-            </label>
-        </div>
+        <label for="carpeta_id">Selecciona una carpeta:</label>
+        <select name="carpeta_id" id="carpeta_id" required>
+            <?php while ($carpeta = $carpetas_result->fetch_assoc()): ?>
+                <option value="<?php echo $carpeta['id']; ?>"><?php echo htmlspecialchars($carpeta['nombre_carpeta']); ?></option>
+            <?php endwhile; ?>
+        </select>
 
-        <button type="button" id="addOption">Agregar Otra Opción</button>
+        <label for="clasificacion">Clasificación:</label>
+        <input type="text" name="clasificacion" required>
+
+        <label for="comentario">Comentario:</label>
+        <textarea name="comentario" rows="3" placeholder="Agrega un comentario"></textarea>
+
+        <label for="files">Selecciona archivos:</label>
+        <input type="file" name="files[]" multiple required>
+
         <input type="submit" value="Subir Archivos">
     </form>
-
-    <a href="dashboard.php">Volver al Dashboard</a>
+    <a href="dashboard.php">Volver al dashboard</a>
 </div>
-
-<script>
-    document.getElementById('addOption').addEventListener('click', function() {
-        const opciones = document.getElementById('opciones');
-        const newOption = document.createElement('div');
-        newOption.innerHTML = `
-            <label>
-                <input type="checkbox" name="importante[${opciones.children.length}]"> Marcar como Importante
-            </label>
-            <label>
-                <input type="checkbox" name="dividir[${opciones.children.length}]"> Dividir PDF (solo si es un archivo PDF)
-            </label>
-        `;
-        opciones.appendChild(newOption);
-    });
-</script>
 </body>
 </html>
